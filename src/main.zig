@@ -74,7 +74,7 @@ pub fn passwordMessage(user: []const u8, password: []const u8, salt: [4]u8) ![]u
     return response.items;
 }
 
-pub const sqlColumn = struct {
+pub const SqlColumn = struct {
     const Self = @This();
 
     columnName: []const u8,
@@ -88,16 +88,36 @@ pub const sqlColumn = struct {
     }
 };
 
-pub const sqlRaw = struct {
+pub const SqlRaw = struct {
     const Self = @This();
     fields: ArrayList([]const u8) = ArrayList([]const u8).init(std.heap.c_allocator),
 };
 
-pub const sqlRaws = struct {
+pub const SqlRaws = struct {
     const Self = @This();
 
-    sqlColumns: []sqlColumn,
-    raws: ArrayList(sqlRaw) = ArrayList(sqlRaw).init(std.heap.c_allocator),
+    sqlColumns: []SqlColumn,
+    raws: ArrayList(SqlRaw),
+    pub fn init(columns: []SqlColumn) Self{
+        return .{
+            .sqlColumns = columns,
+            .raws = ArrayList(SqlRaw).init(std.heap.c_allocator),
+        };
+    }
+};
+
+pub const SqlResult = struct {
+    const Self = @This();
+
+    sqlRaws: ?SqlRaws,
+    sqlError: ?SqlError,
+
+    pub fn init(raws: ?SqlRaws, sqlErr: ?SqlError) Self{
+        return .{
+            .sqlRaws = raws,
+            .sqlError = sqlErr,
+        };
+    }
 };
 
 pub const Kv = struct {
@@ -112,6 +132,13 @@ pub const Kv = struct {
             .val = val,
         };
     }
+};
+
+pub const SqlError = struct{
+    const Self = @This();
+
+    code: []const u8,
+    message: []const u8,
 };
 
 pub const Conn = struct {
@@ -185,11 +212,11 @@ pub const Conn = struct {
         }
     }
 
-    pub fn query(conn: *Self, sql: []const u8) !sqlRaws {
-        var raws: sqlRaws = sqlRaws{
-            .sqlColumns = undefined,
-        };
-        var sqlColumns = ArrayList(sqlColumn).init(std.heap.c_allocator);
+    pub fn query(conn: *Self, sql: []const u8) !SqlResult {
+        var sqlRaws: ?SqlRaws = null;
+        var sqlError: ?SqlError = null; 
+        var sqlColumns = ArrayList(SqlColumn).init(std.heap.c_allocator);
+
         var req = try queryMessage(sql);
         try sock.writer().writeAll(req);
 
@@ -221,28 +248,29 @@ pub const Conn = struct {
                     // In a RowDescription returned from the statement variant of Describe, the format code is not yet known and will always be zero.
                     _ = try sock.reader().readInt(i16, .Big);
                     // raw =  ;
-                    try sqlColumns.append(sqlColumn.init(name, dataType));
+                    try sqlColumns.append(SqlColumn.init(name, dataType));
                     i += 1;
                 }
 
-                raws.sqlColumns = sqlColumns.items;
+                sqlRaws = SqlRaws.init(sqlColumns.items);
             }
 
             if (messageType == 69) {
-                // TODO: PARSE ERROR
+                sqlError = try conn.readSqlError();
             }
 
             if (messageType == 68){
                 var numberOfColumns = try sock.reader().readInt(i16, .Big);
                 var i: u32 = 0;
-                var raw: sqlRaw = sqlRaw{};
+                var raw: SqlRaw = SqlRaw{};
                 while (i < numberOfColumns) {
                     var lenOfColumnValue = try sock.reader().readInt(i32, .Big);
                     var fieldValue = try conn.readMessageN(lenOfColumnValue);
                     try raw.fields.append(fieldValue);
                     i += 1;
                 }
-                try raws.raws.append(raw);
+
+                try sqlRaws.?.raws.append(raw);
             }
 
             if (messageType == 67){
@@ -257,7 +285,39 @@ pub const Conn = struct {
             }
         }
 
-        return raws;
+
+        if (sqlError != null)  {
+            return SqlResult.init(null, sqlError);
+        }
+        return SqlResult.init(sqlRaws, null);
+    }
+
+    fn readSqlError(conn: Self) !SqlError{
+        var code: []const u8 = undefined;
+        var message: []const u8 = undefined;
+        const delimiter: u8 = "\x00"[0];
+
+        while (true) {
+            var messageType = try sock.reader().readByte();
+            if (messageType == delimiter){
+                break;
+            }
+            var err = try conn.readMessageUntilDelimiter(delimiter);
+            switch (messageType) {
+                77 => {
+                    message = err;
+                },
+                67 => {
+                    code = err;
+                },
+                else => {},
+            }
+        }
+
+        return SqlError{
+            .code = code,
+            .message = message,
+        };
     }
 
     fn readMessageN(_: Self, num_size: i32) ![]u8 {

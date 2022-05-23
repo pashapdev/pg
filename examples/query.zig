@@ -20,32 +20,50 @@ pub fn main() !void {
     defer conn.deinit();
 
 
-    var q: []const u8 = "CREATE TABLE IF NOT EXISTS test_table (id integer, name TEXT);";
+    var q: []const u8 = "CREATE TABLE IF NOT EXISTS test_table1(id integer, name TEXT);";
     _ = try conn.query(q);
-    q = "insert into test_table(id, name) values(1, 'name1')";
+    q = "insert into test_table1(id, name) values(1, 'name1')";
     _ = try conn.query(q);
-    q = "insert into test_table(id, name) values(2, 'name2')";
+    q = "insert into test_table1(id, name) values(2, 'name2')";
     _ = try conn.query(q);
-    q = "select * from test_table";
+    q = "select * from test_table1";
     var res = try conn.query(q);
-    q = "DROP TABLE IF EXISTS test_table;";
+    printSqlResult(res);
+    q = "select * fom test_table1";
+    res = try conn.query(q);
+    printSqlResult(res);
+    q = "DROP TABLE IF EXISTS test_table1;";
     _ = try conn.query(q);
+}
+
+fn printSqlResult(res: pg.SqlResult) void{
+    if (res.sqlError) |sqlError| {
+        std.debug.print("sqlError: {s} {s}\n", .{sqlError.code, sqlError.message});
+    } else {
+        printRaws(res.sqlRaws);
+    }
+}
+
+fn printRaws(res: ?pg.SqlRaws) void{
+    if (res == null) {
+        std.debug.print("No raws\n", .{});
+        return;
+    }
 
     var i: u32 = 0;
     var j: u32 = 0;
-
     std.debug.print("Columns:\n", .{});
-    while (i < res.sqlColumns.len) {
-        std.debug.print("{s} ({d}) ", .{res.sqlColumns[i].columnName, res.sqlColumns[i].dataType});
+    while (i < res.?.sqlColumns.len) {
+        std.debug.print("{s} ({d}) ", .{res.?.sqlColumns[i].columnName, res.?.sqlColumns[i].dataType});
         i+=1;
     }
 
     std.debug.print("\n", .{});
     i = 0;
-    while (i < res.raws.items.len) {
+    while (i < res.?.raws.items.len) {
         j = 0;
-        while (j < res.raws.items[i].fields.items.len) {
-            std.debug.print("{s}       ", .{res.raws.items[i].fields.items[j]});
+        while (j < res.?.raws.items[i].fields.items.len) {
+            std.debug.print("{s}       ", .{res.?.raws.items[i].fields.items[j]});
             j+=1;
         }
         std.debug.print("\n", .{});
