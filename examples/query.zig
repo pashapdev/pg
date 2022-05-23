@@ -21,19 +21,23 @@ pub fn main() !void {
 
 
     var q: []const u8 = "CREATE TABLE IF NOT EXISTS test_table1(id integer, name TEXT);";
-    _ = try conn.query(q);
-    q = "insert into test_table1(id, name) values(1, 'name1')";
-    _ = try conn.query(q);
-    q = "insert into test_table1(id, name) values(2, 'name2')";
-    _ = try conn.query(q);
-    q = "select * from test_table1";
     var res = try conn.query(q);
+    printSqlResult(res);
+    q = "insert into test_table1(id, name) values(1, 'name1')";
+    res = try conn.query(q);
+    printSqlResult(res);
+    q = "insert into test_table1(id, name) values(2, 'name2')";
+    res = try conn.query(q);
+    printSqlResult(res);
+    q = "select * from test_table1";
+    res = try conn.query(q);
     printSqlResult(res);
     q = "select * fom test_table1";
     res = try conn.query(q);
     printSqlResult(res);
     q = "DROP TABLE IF EXISTS test_table1;";
-    _ = try conn.query(q);
+    res = try conn.query(q);
+    printSqlResult(res);
 }
 
 fn printSqlResult(res: pg.SqlResult) void{

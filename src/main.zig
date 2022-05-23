@@ -259,6 +259,13 @@ pub const Conn = struct {
                 sqlError = try conn.readSqlError();
             }
 
+            if (messageType == 78) {
+                var code = try sock.reader().readByte();
+                if (code != 0) {
+                    sqlError = try conn.readSqlError();
+                }
+            }
+
             if (messageType == 68){
                 var numberOfColumns = try sock.reader().readInt(i16, .Big);
                 var i: u32 = 0;
@@ -277,6 +284,7 @@ pub const Conn = struct {
                 // column values
                 _ = try conn.readMessageN(len);
             }
+
 
             // 'Z'
             if (messageType == 90) {
