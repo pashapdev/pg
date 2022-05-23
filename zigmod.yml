@@ -1,0 +1,10 @@
+id: ze4b54pu569qp32zen3e5ztqb2zf9v7k8mty2aawccq53eb0
+name: pg
+main: src/main.zig
+license: MIT
+description: pure zig postgresql driver
+dependencies:
+  - src: git https://github.com/MasterQ32/zig-network
+root_dependencies:
+
+  - src: git https://github.com/MasterQ32/zig-network
